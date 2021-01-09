@@ -2,6 +2,7 @@ package profile
 
 import rt "core:runtime"
 import "core:strings"
+import "core:hash"
 
 @private
 tracy_location :: proc(loc: rt.Source_Code_Location, name := "") -> ^___tracy_source_location_data
@@ -23,11 +24,12 @@ scoped_zone :: proc(name := "", loc:= #caller_location) -> ___tracy_c_zone_conte
 scoped_zone_begin :: proc(name := "", loc:= #caller_location) -> ___tracy_c_zone_context
 {
     @static loc_map: map[u64]^___tracy_source_location_data;
-    tr_loc := loc_map[loc.hash];
+    loc_hash := source_code_location_hash(loc);
+    tr_loc := loc_map[loc_hash];
     if tr_loc == nil
     {
         tr_loc = tracy_location(loc, name);
-        loc_map[loc.hash] = tr_loc;
+        loc_map[loc_hash] = tr_loc;
     }
     return ___tracy_emit_zone_begin(tr_loc, 1);
 }
@@ -35,4 +37,12 @@ scoped_zone_begin :: proc(name := "", loc:= #caller_location) -> ___tracy_c_zone
 scoped_zone_end :: proc(ctx: ___tracy_c_zone_context)
 {
     ___tracy_emit_zone_end(ctx);
+}
+
+@private
+source_code_location_hash :: proc(s := #caller_location) -> u64 {
+	hash := hash.fnv64a(transmute([]byte)s.file_path);
+	hash = hash ~ (u64(s.line) * 0x100000001b3);
+	hash = hash ~ (u64(s.column) * 0x100000001b3);
+	return hash;
 }
